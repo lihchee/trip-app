@@ -1,5 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import polars as pl
 import tempfile
 import os
@@ -26,11 +27,9 @@ st.title("✈️ TripTry: Personal Itinerary Extractor")
 st.markdown("Upload a PDF booking confirmation to generate a structured timeline.")
 
 # 2.5 Get the API Key securely
-# Checks the Streamlit secret safe first. If found, it uses it silently.
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
 else:
-    # If the safe is empty, ask for it in the sidebar.
     with st.sidebar:
         st.header("Settings")
         api_key = st.text_input("Google AI Studio API Key", type="password")
@@ -42,29 +41,30 @@ uploaded_file = st.file_uploader("Drop your PDF booking receipt here", type=["pd
 # 3. Process the File
 if uploaded_file and api_key:
     if st.button("Extract Itinerary"):
-        genai.configure(api_key=api_key)
+        # Use the NEW Google GenAI client
+        client = genai.Client(api_key=api_key)
         
         with st.spinner("Parsing document with Gemini 1.5 Flash..."):
             try:
-                # Save the uploaded file temporarily so Gemini can read it
+                # Save the uploaded file temporarily
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as temp_file:
                     temp_file.write(uploaded_file.read())
                     temp_path = temp_file.name
 
-                # Upload to Google's temporary File API
-                gemini_file = genai.upload_file(path=temp_path, display_name=uploaded_file.name)
+                # Upload using the new API
+                gemini_file = client.files.upload(file=temp_path)
                 
-                # Ask Gemini to extract the data
-                model = genai.GenerativeModel("gemini-1.5-flash")
                 prompt = """
                 You are an expert travel assistant. Read this booking confirmation and extract 
                 every travel event (flights, check-ins, check-outs) into the required JSON schema.
                 Ensure all dates are converted to standard ISO 8601 format.
                 """
                 
-                response = model.generate_content(
-                    [gemini_file, prompt],
-                    generation_config=genai.GenerationConfig(
+                # Generate content using the new client format
+                response = client.models.generate_content(
+                    model="gemini-1.5-flash",
+                    contents=[gemini_file, prompt],
+                    config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_schema=TripItinerary,
                         temperature=0.1 
@@ -72,7 +72,7 @@ if uploaded_file and api_key:
                 )
 
                 # Clean up files
-                genai.delete_file(gemini_file.name)
+                client.files.delete(name=gemini_file.name)
                 os.remove(temp_path)
 
                 # 4. Display the Results
@@ -99,4 +99,4 @@ if uploaded_file and api_key:
                 st.error(f"An error occurred: {e}")
 
 elif uploaded_file and not api_key:
-    st.warning("Please enter your Gemini API key in the sidebar or save it in Streamlit Secrets to continue.")
+    st.warning("Please enter your Gemini API key to continue.")
