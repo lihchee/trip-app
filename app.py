@@ -41,17 +41,15 @@ uploaded_file = st.file_uploader("Drop your PDF booking receipt here", type=["pd
 # 3. Process the File
 if uploaded_file and api_key:
     if st.button("Extract Itinerary"):
-        # Use the NEW Google GenAI client and explicitly point to the v1beta endpoint
-        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1beta'})
+        # Revert to the stable default endpoint
+        client = genai.Client(api_key=api_key)
         
         with st.spinner("Parsing document with Gemini 1.5 Flash..."):
             try:
-                # Save the uploaded file temporarily
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as temp_file:
                     temp_file.write(uploaded_file.read())
                     temp_path = temp_file.name
 
-                # Upload using the new API
                 gemini_file = client.files.upload(file=temp_path)
                 
                 prompt = """
@@ -60,9 +58,9 @@ if uploaded_file and api_key:
                 Ensure all dates are converted to standard ISO 8601 format.
                 """
                 
-                # Generate content using the new client format
+                # Hardcode the explicit model version instead of the generic alias
                 response = client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-1.5-flash-002",
                     contents=[gemini_file, prompt],
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
@@ -71,7 +69,6 @@ if uploaded_file and api_key:
                     )
                 )
 
-                # Clean up files
                 client.files.delete(name=gemini_file.name)
                 os.remove(temp_path)
 
