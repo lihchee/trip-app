@@ -5,6 +5,7 @@ import polars as pl
 import tempfile
 import os
 import json
+import pypdf
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
@@ -26,7 +27,7 @@ st.set_page_config(page_title="TripTry", page_icon="✈️", layout="wide")
 st.title("✈️ TripTry: Personal Itinerary Extractor")
 st.markdown("Upload a PDF booking confirmation to generate a structured timeline.")
 
-# 2.5 Get the API Key securely (Checks Streamlit Secrets or sidebar fallback)
+# 2.5 Get the API Key securely
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
 else:
@@ -43,36 +44,40 @@ if uploaded_file and api_key:
     if st.button("Extract Itinerary"):
         client = genai.Client(api_key=api_key)
         
-        with st.spinner("Parsing document with Gemini 3.8 Flash..."):
+        with st.spinner("Extracting text and parsing with Gemini 3.8 Flash..."):
             try:
-                # Save the uploaded file temporarily so Gemini can read it
+                # Save temporarily to read locally
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as temp_file:
                     temp_file.write(uploaded_file.read())
                     temp_path = temp_file.name
 
-                # Upload to Google's temporary File API
-                gemini_file = client.files.upload(file=temp_path)
+                # Extract text locally using pypdf (Instantaneous)
+                reader = pypdf.PdfReader(temp_path)
+                pdf_text = ""
+                for page in reader.pages:
+                    pdf_text += page.extract_text() or ""
                 
-                prompt = """
-                You are an expert travel assistant. Read this booking confirmation and extract 
+                os.remove(temp_path)
+
+                prompt = f"""
+                You are an expert travel assistant. Read this booking confirmation text and extract 
                 every travel event (flights, check-ins, check-outs) into the required JSON schema.
                 Ensure all dates are converted to standard ISO 8601 format.
+
+                Booking Confirmation Text:
+                {pdf_text}
                 """
                 
-                # Generate content using the new SDK and current Gemini 3.8 Flash model
+                # Send text directly instead of uploading a file
                 response = client.models.generate_content(
                     model="gemini-3.8-flash",
-                    contents=[gemini_file, prompt],
+                    contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_schema=TripItinerary,
                         temperature=0.1 
                     )
                 )
-
-                # Clean up temporary files
-                client.files.delete(name=gemini_file.name)
-                os.remove(temp_path)
 
                 # 4. Display the Results
                 extracted_data = json.loads(response.text)
