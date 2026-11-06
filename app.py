@@ -41,8 +41,8 @@ uploaded_file = st.file_uploader("Drop your PDF booking receipt here", type=["pd
 # 3. Process the File
 if uploaded_file and api_key:
     if st.button("Extract Itinerary"):
-        # Use the NEW Google GenAI client
-        client = genai.Client(api_key=api_key)
+        # Use the NEW Google GenAI client and explicitly point to the v1beta endpoint
+        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1beta'})
         
         with st.spinner("Parsing document with Gemini 1.5 Flash..."):
             try:
