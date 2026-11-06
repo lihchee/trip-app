@@ -8,7 +8,7 @@ import json
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-# 1. Define what the output should look like
+# 1. Define what the output structured JSON should look like
 class TravelEvent(BaseModel):
     event_type: str = Field(description="Type of event: 'Flight', 'Hotel', 'Train', or 'Activity'")
     start_datetime: Optional[str] = Field(description="Start time in ISO 8601 format (e.g., 2026-12-28T01:10:00). Leave null if unknown.")
@@ -26,7 +26,7 @@ st.set_page_config(page_title="TripTry", page_icon="✈️", layout="wide")
 st.title("✈️ TripTry: Personal Itinerary Extractor")
 st.markdown("Upload a PDF booking confirmation to generate a structured timeline.")
 
-# 2.5 Get the API Key securely
+# 2.5 Get the API Key securely (Checks Streamlit Secrets or sidebar fallback)
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
 else:
@@ -41,15 +41,16 @@ uploaded_file = st.file_uploader("Drop your PDF booking receipt here", type=["pd
 # 3. Process the File
 if uploaded_file and api_key:
     if st.button("Extract Itinerary"):
-        # Revert to the stable default endpoint
         client = genai.Client(api_key=api_key)
         
-        with st.spinner("Parsing document with Gemini 1.5 Flash..."):
+        with st.spinner("Parsing document with Gemini 3.8 Flash..."):
             try:
+                # Save the uploaded file temporarily so Gemini can read it
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as temp_file:
                     temp_file.write(uploaded_file.read())
                     temp_path = temp_file.name
 
+                # Upload to Google's temporary File API
                 gemini_file = client.files.upload(file=temp_path)
                 
                 prompt = """
@@ -58,9 +59,9 @@ if uploaded_file and api_key:
                 Ensure all dates are converted to standard ISO 8601 format.
                 """
                 
-                # Hardcode the explicit model version instead of the generic alias
+                # Generate content using the new SDK and current Gemini 3.8 Flash model
                 response = client.models.generate_content(
-                    model="gemini-1.5-flash-002",
+                    model="gemini-3.8-flash",
                     contents=[gemini_file, prompt],
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
@@ -69,6 +70,7 @@ if uploaded_file and api_key:
                     )
                 )
 
+                # Clean up temporary files
                 client.files.delete(name=gemini_file.name)
                 os.remove(temp_path)
 
@@ -96,4 +98,4 @@ if uploaded_file and api_key:
                 st.error(f"An error occurred: {e}")
 
 elif uploaded_file and not api_key:
-    st.warning("Please enter your Gemini API key to continue.")
+    st.warning("Please enter your Gemini API key in the sidebar or save it in Streamlit Secrets to continue.")
