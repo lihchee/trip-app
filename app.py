@@ -23,7 +23,7 @@ class TripItinerary(BaseModel):
 # 2. Build the Webpage UI
 st.set_page_config(page_title="TripTry", page_icon="✈️", layout="wide")
 st.title("✈️ TripTry: Personal Itinerary Extractor")
-st.markdown("Upload a PDF booking confirmation (like your ZIPAIR receipt) to generate a structured timeline.")
+st.markdown("Upload a PDF booking confirmation to generate a structured timeline.")
 
 # 2.5 Get the API Key securely
 # Checks the Streamlit secret safe first. If found, it uses it silently.
